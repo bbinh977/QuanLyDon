@@ -38,6 +38,7 @@ User uploaded source code of AiGa OS (Google Apps Script + HTML) - a Taobao orde
 - ✅ Dark elegant theme with cyan accents
 - ✅ Dashboard with revenue chart, status chart, top customers
 - ✅ Orders CRUD with status workflow (Chưa mua → Đã mua → Đã giao → Hoàn tất)
+- ✅ Orders: **Custom weight fee input** (user can input rounded weight fee, e.g., 20.000đ instead of auto-calculated 16.800đ)
 - ✅ Customers CRUD with auto-generated customer codes (KH001, KH002...)
 - ✅ Finance CRUD with income/expense tracking
 - ✅ Tracking page with Giang Huy API integration (search, sync one, sync all)
