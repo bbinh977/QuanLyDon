@@ -146,6 +146,7 @@ class OrderCreate(BaseModel):
     product_name: str
     price_yuan: float
     amount_received: float = 0.0
+    weight_fee_customer: Optional[float] = None  # Tiền cân khách trả (làm tròn). Nếu không gửi sẽ tự tính từ weight_kg * weight_rate
     weight_paid: bool = False
     status: str = "Chưa mua"
     notes: Optional[str] = None
@@ -158,6 +159,7 @@ class OrderUpdate(BaseModel):
     product_name: Optional[str] = None
     price_yuan: Optional[float] = None
     amount_received: Optional[float] = None
+    weight_fee_customer: Optional[float] = None
     weight_paid: Optional[bool] = None
     status: Optional[str] = None
     notes: Optional[str] = None
@@ -424,14 +426,16 @@ async def calculate_order_fields(order_data: dict, config: SystemConfig) -> dict
     price_quoted = price_yuan * config.exchange_rate
     
     # Calculate weight fee
-    weight_fee = weight_kg * config.weight_rate
-    weight_fee_customer = order_data.get('weight_fee_customer', weight_fee)
-    if weight_fee_customer == 0:
-        weight_fee_customer = weight_fee
+    # User can input custom weight_fee_customer (rounded up) which overrides the auto-calculated value
+    user_weight_fee = order_data.get('weight_fee_customer')
+    if user_weight_fee is not None and user_weight_fee > 0:
+        # User provided a custom rounded weight fee
+        weight_fee_customer = float(user_weight_fee)
+    else:
+        # Auto-calculate based on weight_kg * weight_rate
+        weight_fee_customer = weight_kg * config.weight_rate
     
     # Calculate profit
-    weight_paid = order_data.get('weight_paid', False)
-    unpaid_weight = 0 if weight_paid else weight_fee_customer
     profit = amount_received - price_quoted
     
     return {
@@ -481,10 +485,10 @@ async def create_order(order_data: OrderCreate):
     data_dict = order_data.model_dump()
     calculated = await calculate_order_fields(data_dict, config)
     
-    order = Order(
-        **data_dict,
-        **calculated
-    )
+    # Merge: calculated fields override input fields (especially weight_fee_customer)
+    data_dict.update(calculated)
+    
+    order = Order(**data_dict)
     
     doc = order.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()

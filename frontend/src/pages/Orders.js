@@ -15,6 +15,7 @@ const Orders = () => {
     customer_name: '',
     customer_code: '',
     weight_kg: 0,
+    weight_fee_customer: '',
     product_name: '',
     price_yuan: 0,
     amount_received: 0,
@@ -46,10 +47,18 @@ const Orders = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Prepare data - convert weight_fee_customer empty string to null (auto-calc) or number
+      const payload = {
+        ...formData,
+        weight_fee_customer: formData.weight_fee_customer === '' || formData.weight_fee_customer === null
+          ? null
+          : parseFloat(formData.weight_fee_customer)
+      };
+      
       if (editingOrder) {
-        await ordersAPI.update(editingOrder.id, formData);
+        await ordersAPI.update(editingOrder.id, payload);
       } else {
-        await ordersAPI.create(formData);
+        await ordersAPI.create(payload);
       }
       setShowModal(false);
       resetForm();
@@ -86,6 +95,7 @@ const Orders = () => {
       customer_name: order.customer_name,
       customer_code: order.customer_code || '',
       weight_kg: order.weight_kg,
+      weight_fee_customer: order.weight_fee_customer || '',
       product_name: order.product_name,
       price_yuan: order.price_yuan,
       amount_received: order.amount_received,
@@ -103,6 +113,7 @@ const Orders = () => {
       customer_name: '',
       customer_code: '',
       weight_kg: 0,
+      weight_fee_customer: '',
       product_name: '',
       price_yuan: 0,
       amount_received: 0,
@@ -195,6 +206,7 @@ const Orders = () => {
                   <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Khách hàng</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-foreground">Sản phẩm</th>
                   <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Giá tệ</th>
+                  <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Tiền cân</th>
                   <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Đã nhận</th>
                   <th className="px-4 py-3 text-right text-sm font-medium text-foreground">Lãi</th>
                   <th className="px-4 py-3 text-center text-sm font-medium text-foreground">Trạng thái</th>
@@ -216,6 +228,16 @@ const Orders = () => {
                     <td className="px-4 py-3 text-sm text-foreground">{order.product_name}</td>
                     <td className="px-4 py-3 text-sm text-foreground text-right">
                       ¥{order.price_yuan.toLocaleString('vi-VN')}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="text-foreground">{order.weight_fee_customer.toLocaleString('vi-VN')}đ</span>
+                        {order.weight_paid ? (
+                          <span className="text-xs text-green-500">✓ Đã trả</span>
+                        ) : (
+                          <span className="text-xs text-orange-500">Chưa trả</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-foreground text-right">
                       {order.amount_received.toLocaleString('vi-VN')}đ
@@ -332,6 +354,20 @@ const Orders = () => {
                       className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Tiền cân nhận (đ) <span className="text-xs text-muted-foreground">(để trống = tự tính theo kg × đơn giá)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="1000"
+                    placeholder={`Tự động: ${(formData.weight_kg * 24000).toLocaleString('vi-VN')}đ (có thể làm tròn)`}
+                    value={formData.weight_fee_customer}
+                    onChange={(e) => setFormData({ ...formData, weight_fee_customer: e.target.value })}
+                    className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                  />
                 </div>
 
                 <div>
