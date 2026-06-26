@@ -10,6 +10,7 @@ import Finance from './pages/Finance';
 import Tracking from './pages/Tracking';
 import AIInsight from './pages/AIInsight';
 import Settings from './pages/Settings';
+import Account from './pages/Account';
 import './App.css';
 
 // Protected Route Component
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="finance" element={<Finance />} />
         <Route path="tracking" element={<Tracking />} />
         <Route path="ai-insight" element={<AIInsight />} />
+        <Route path="account" element={<Account />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

@@ -10,7 +10,8 @@ import {
   Settings,
   Menu,
   X,
-  LogOut
+  LogOut,
+  UserCog
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,6 +27,7 @@ const Layout = () => {
     { name: 'Tài chính', path: '/finance', icon: DollarSign },
     { name: 'Tracking', path: '/tracking', icon: Truck },
     { name: 'AI Insight', path: '/ai-insight', icon: Brain },
+    { name: 'Tài khoản', path: '/account', icon: UserCog },
     { name: 'Cấu hình', path: '/settings', icon: Settings },
   ];
 

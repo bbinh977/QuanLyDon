@@ -314,6 +314,81 @@ async def get_me(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
+# User management endpoints
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+class UserCreateAdmin(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+
+@api_router.get("/auth/users", response_model=List[User])
+async def list_users():
+    """List all users"""
+    docs = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    for d in docs:
+        if isinstance(d.get('created_at'), str):
+            d['created_at'] = datetime.fromisoformat(d['created_at'])
+    return [User(**d) for d in docs]
+
+@api_router.post("/auth/users", response_model=User)
+async def create_user_by_admin(user_data: UserCreateAdmin):
+    """Create a new user (admin)"""
+    existing = await db.users.find_one({"email": user_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email đã tồn tại")
+    
+    existing_username = await db.users.find_one({"username": user_data.username})
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username đã tồn tại")
+    
+    user = User(
+        username=user_data.username,
+        email=user_data.email,
+        full_name=user_data.full_name
+    )
+    
+    user_doc = user.model_dump()
+    user_doc['password'] = hash_password(user_data.password)
+    user_doc['created_at'] = user_doc['created_at'].isoformat()
+    
+    await db.users.insert_one(user_doc)
+    return user
+
+@api_router.delete("/auth/users/{user_id}")
+async def delete_user(user_id: str):
+    """Delete a user"""
+    # Don't allow deleting the last user
+    count = await db.users.count_documents({})
+    if count <= 1:
+        raise HTTPException(status_code=400, detail="Không thể xóa user cuối cùng")
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+    return {"success": True}
+
+@api_router.put("/auth/me/password")
+async def change_my_password(data: PasswordChange, user: User = Depends(get_current_user)):
+    """Change own password"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Chưa đăng nhập")
+    
+    user_doc = await db.users.find_one({"id": user.id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+    
+    if not verify_password(data.old_password, user_doc['password']):
+        raise HTTPException(status_code=400, detail="Mật khẩu cũ không đúng")
+    
+    new_hashed = hash_password(data.new_password)
+    await db.users.update_one({"id": user.id}, {"$set": {"password": new_hashed}})
+    
+    return {"success": True, "message": "Đổi mật khẩu thành công"}
+
 # ============================================================================
 # CONFIG ENDPOINTS
 # ============================================================================
