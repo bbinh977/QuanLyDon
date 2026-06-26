@@ -36,7 +36,12 @@ User uploaded source code of AiGa OS (Google Apps Script + HTML) - a Taobao orde
 - ✅ Complete backend API with MongoDB
 - ✅ Full authentication system (JWT) with toggle
 - ✅ Dark elegant theme with cyan accents
-- ✅ Dashboard with revenue chart, status chart, top customers
+- ✅ **Comprehensive Dashboard** with month/year filter:
+  - 10 stat cards (Tổng đơn, Doanh thu, Lợi nhuận, Chi phí, Công nợ, Tổng tệ, Tiền cân khách, Chưa mua, Chưa trả cân, Số dư khả dụng)
+  - "Việc cần xử lý" sidebar panel (5 task rows + button mở danh sách đơn)
+  - Operational alerts (mã vận đơn trùng, đơn quá hạn, lãi âm, chưa trả cân)
+  - Financial line chart (Doanh thu, Lợi nhuận, Chi phí theo từng ngày trong tháng)
+  - Order status donut chart with percentages
 - ✅ Orders CRUD with status workflow (Chưa mua → Đã mua → Đã giao → Hoàn tất)
 - ✅ Orders: **Custom weight fee input** (user can input rounded weight fee, e.g., 20.000đ instead of auto-calculated 16.800đ)
 - ✅ Customers CRUD with auto-generated customer codes (KH001, KH002...)
@@ -48,6 +53,11 @@ User uploaded source code of AiGa OS (Google Apps Script + HTML) - a Taobao orde
 - ✅ Customer debt and unpaid weight tracking
 - ✅ Real-time data updates
 - ✅ Responsive design
+
+## New Dashboard API Endpoints
+- /api/dashboard/stats (extended with 15+ fields)
+- /api/dashboard/chart-data (daily breakdown for month)
+- /api/dashboard/alerts (operational warnings)
 
 ## API Endpoints
 - Auth: /api/auth/register, /api/auth/login, /api/auth/me

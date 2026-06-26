@@ -78,6 +78,8 @@ export const dashboardAPI = {
   getStats: (params) => api.get('/dashboard/stats', { params }),
   getRecentOrders: (params) => api.get('/dashboard/recent-orders', { params }),
   getTopCustomers: (params) => api.get('/dashboard/top-customers', { params }),
+  getChartData: (params) => api.get('/dashboard/chart-data', { params }),
+  getAlerts: (params) => api.get('/dashboard/alerts', { params }),
 };
 
 // Tracking

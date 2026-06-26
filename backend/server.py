@@ -188,6 +188,7 @@ class FinanceUpdate(BaseModel):
 
 # Dashboard Stats
 class DashboardStats(BaseModel):
+    # Existing core
     total_orders: int
     total_revenue: float
     total_profit: float
@@ -196,6 +197,26 @@ class DashboardStats(BaseModel):
     total_debt: float
     monthly_orders: int
     today_orders: int
+    # Yuan & costs
+    total_yuan: float = 0  # Tổng tệ đã dùng
+    total_expense: float = 0  # Chi phí (từ Finance)
+    total_income_other: float = 0  # Thu khác (lương...)
+    total_balance: float = 0  # Số dư khả dụng = lương net + lãi + thu khác - chi
+    salary_net: float = 0  # Lương net
+    # Weight
+    total_weight_base_fee: float = 0  # Tiền cân base = kg × đơn giá
+    total_weight_customer_paid: float = 0  # Tổng tiền cân khách trả
+    weight_round_profit: float = 0  # Lãi từ làm tròn cân
+    total_unpaid_weight_fee: float = 0  # Tiền cân chưa thu
+    # Status counts
+    count_chua_mua: int = 0
+    count_da_mua: int = 0
+    count_da_giao: int = 0
+    count_hoan_tat: int = 0
+    # Alerts
+    negative_profit_count: int = 0  # Đơn lãi âm
+    duplicate_tracking_count: int = 0  # Mã vận đơn trùng
+    old_bought_count: int = 0  # Đơn đã mua > 10 ngày chưa giao
 
 # ============================================================================
 # AUTH UTILITIES
@@ -648,6 +669,9 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
     current_month = month or now.month
     current_year = year or now.year
     
+    # Get config for salary calculation
+    config = await get_config()
+    
     # Get all orders
     all_orders = await get_orders()
     
@@ -661,13 +685,64 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
     total_revenue = sum(o.amount_received for o in month_orders)
     total_profit = sum(o.profit for o in month_orders)
     total_weight_fee = sum(o.weight_fee_customer for o in month_orders)
+    total_yuan = sum(o.price_yuan for o in month_orders)
+    
+    # Weight calculations
+    total_weight_base_fee = sum(o.weight_kg * config.weight_rate for o in month_orders)
+    total_weight_customer_paid = sum(o.weight_fee_customer for o in month_orders)
+    weight_round_profit = total_weight_customer_paid - total_weight_base_fee
+    
     unpaid_weight_count = sum(1 for o in month_orders if not o.weight_paid and o.weight_fee_customer > 0)
+    total_unpaid_weight_fee = sum(o.weight_fee_customer for o in month_orders if not o.weight_paid)
     
     # Calculate total debt (money not yet received from customers)
     total_debt = sum(
         max(0, o.price_quoted + (0 if o.weight_paid else o.weight_fee_customer) - o.amount_received)
         for o in month_orders
     )
+    
+    # Status counts
+    count_chua_mua = sum(1 for o in month_orders if o.status == "Chưa mua")
+    count_da_mua = sum(1 for o in month_orders if o.status == "Đã mua")
+    count_da_giao = sum(1 for o in month_orders if o.status == "Đã giao")
+    count_hoan_tat = sum(1 for o in month_orders if o.status == "Hoàn tất")
+    
+    # Get finance data for this month
+    all_finance = await get_finance_records()
+    month_finance = [f for f in all_finance if f.date.month == current_month and f.date.year == current_year]
+    
+    def is_income_type(type_str):
+        lower = type_str.lower()
+        return '[thu]' in lower or 'thu nhập' in lower or lower == 'thu'
+    
+    total_expense = sum(f.amount for f in month_finance if not is_income_type(f.type))
+    total_income_other = sum(f.amount for f in month_finance if is_income_type(f.type))
+    
+    # Salary calc
+    salary_gross = config.salary_base * config.salary_coefficient
+    salary_insurance = salary_gross * (config.insurance_percent / 100)
+    salary_net = salary_gross - salary_insurance
+    
+    # Total balance
+    total_balance = salary_net + total_profit + total_income_other - total_expense
+    
+    # Alerts
+    negative_profit_count = sum(1 for o in month_orders if o.profit < 0)
+    
+    # Duplicate tracking codes
+    tracking_codes = {}
+    for o in month_orders:
+        if o.tracking_code and o.tracking_code not in ('N/A', '---'):
+            tracking_codes[o.tracking_code] = tracking_codes.get(o.tracking_code, 0) + 1
+    duplicate_tracking_count = sum(1 for c in tracking_codes.values() if c > 1)
+    
+    # Old bought (status "Đã mua" > 10 days ago)
+    old_bought_count = 0
+    for o in month_orders:
+        if o.status == "Đã mua":
+            age_days = (now - o.created_at).days
+            if age_days > 10:
+                old_bought_count += 1
     
     return DashboardStats(
         total_orders=len(all_orders),
@@ -677,8 +752,155 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
         unpaid_weight_count=unpaid_weight_count,
         total_debt=round(total_debt, 2),
         monthly_orders=len(month_orders),
-        today_orders=len(today_orders)
+        today_orders=len(today_orders),
+        total_yuan=round(total_yuan, 2),
+        total_expense=round(total_expense, 2),
+        total_income_other=round(total_income_other, 2),
+        total_balance=round(total_balance, 2),
+        salary_net=round(salary_net, 2),
+        total_weight_base_fee=round(total_weight_base_fee, 2),
+        total_weight_customer_paid=round(total_weight_customer_paid, 2),
+        weight_round_profit=round(weight_round_profit, 2),
+        total_unpaid_weight_fee=round(total_unpaid_weight_fee, 2),
+        count_chua_mua=count_chua_mua,
+        count_da_mua=count_da_mua,
+        count_da_giao=count_da_giao,
+        count_hoan_tat=count_hoan_tat,
+        negative_profit_count=negative_profit_count,
+        duplicate_tracking_count=duplicate_tracking_count,
+        old_bought_count=old_bought_count
     )
+
+@api_router.get("/dashboard/chart-data")
+async def get_chart_data(month: Optional[int] = None, year: Optional[int] = None):
+    """Get daily chart data for the specified month/year"""
+    now = datetime.now(timezone.utc)
+    current_month = month or now.month
+    current_year = year or now.year
+    
+    # Days in month
+    import calendar
+    days_in_month = calendar.monthrange(current_year, current_month)[1]
+    
+    # Get orders and finance for the month
+    all_orders = await get_orders()
+    all_finance = await get_finance_records()
+    
+    month_orders = [o for o in all_orders if o.created_at.month == current_month and o.created_at.year == current_year]
+    month_finance = [f for f in all_finance if f.date.month == current_month and f.date.year == current_year]
+    
+    def is_income_type(type_str):
+        lower = type_str.lower()
+        return '[thu]' in lower or 'thu nhập' in lower or lower == 'thu'
+    
+    # Build daily data
+    daily_data = []
+    cumulative_revenue = 0
+    cumulative_profit = 0
+    cumulative_expense = 0
+    
+    for day in range(1, days_in_month + 1):
+        day_orders = [o for o in month_orders if o.created_at.day == day]
+        day_expense = sum(f.amount for f in month_finance if f.date.day == day and not is_income_type(f.type))
+        
+        day_revenue = sum(o.amount_received for o in day_orders)
+        day_profit = sum(o.profit for o in day_orders)
+        
+        cumulative_revenue += day_revenue
+        cumulative_profit += day_profit
+        cumulative_expense += day_expense
+        
+        daily_data.append({
+            "day": day,
+            "label": str(day),
+            "revenue": round(cumulative_revenue, 2),
+            "profit": round(cumulative_profit, 2),
+            "expense": round(cumulative_expense, 2),
+            "daily_revenue": round(day_revenue, 2),
+            "daily_profit": round(day_profit, 2),
+            "daily_expense": round(day_expense, 2),
+        })
+    
+    return {
+        "month": current_month,
+        "year": current_year,
+        "days": days_in_month,
+        "data": daily_data
+    }
+
+@api_router.get("/dashboard/alerts")
+async def get_dashboard_alerts(month: Optional[int] = None, year: Optional[int] = None):
+    """Get operational alerts for the dashboard"""
+    now = datetime.now(timezone.utc)
+    current_month = month or now.month
+    current_year = year or now.year
+    
+    all_orders = await get_orders()
+    month_orders = [o for o in all_orders if o.created_at.month == current_month and o.created_at.year == current_year]
+    
+    alerts = []
+    
+    # Duplicate tracking codes
+    tracking_codes = {}
+    for o in month_orders:
+        if o.tracking_code and o.tracking_code not in ('N/A', '---'):
+            tracking_codes.setdefault(o.tracking_code, []).append(o)
+    duplicates = {k: v for k, v in tracking_codes.items() if len(v) > 1}
+    if duplicates:
+        alerts.append({
+            "type": "duplicate_tracking",
+            "level": "high",
+            "title": "Mã vận đơn bị trùng",
+            "count": len(duplicates),
+            "detail": "Có thể nhập lặp đơn hàng."
+        })
+    
+    # Old bought (> 10 days)
+    old_bought = [o for o in month_orders if o.status == "Đã mua" and (now - o.created_at).days > 10]
+    if old_bought:
+        alerts.append({
+            "type": "old_bought",
+            "level": "medium",
+            "title": "Đơn đã mua quá 10 ngày chưa giao",
+            "count": len(old_bought),
+            "detail": "Nên kiểm tra tracking hoặc liên hệ kho vận."
+        })
+    
+    # Negative profit
+    negative = [o for o in month_orders if o.profit < 0]
+    if negative:
+        alerts.append({
+            "type": "negative_profit",
+            "level": "high",
+            "title": "Đơn đang lãi âm",
+            "count": len(negative),
+            "detail": "Kiểm tra lại giá tệ, tỉ giá hoặc tiền nhận."
+        })
+    
+    # Unpaid weight on delivered orders
+    unpaid_delivered = [o for o in month_orders 
+                       if o.status in ("Đã giao", "Hoàn tất") and not o.weight_paid and o.weight_fee_customer > 0]
+    if unpaid_delivered:
+        alerts.append({
+            "type": "unpaid_weight",
+            "level": "high",
+            "title": "Đã giao nhưng chưa trả cân",
+            "count": len(unpaid_delivered),
+            "detail": "Cần nhắc khách thanh toán phí cân."
+        })
+    
+    # Missing tracking code
+    missing_mvd = [o for o in month_orders if not o.tracking_code or o.tracking_code in ('N/A', '---')]
+    if missing_mvd:
+        alerts.append({
+            "type": "missing_mvd",
+            "level": "low",
+            "title": "Đơn chưa có mã vận đơn",
+            "count": len(missing_mvd),
+            "detail": "Các đơn này chưa thể tracking tự động."
+        })
+    
+    return {"alerts": alerts}
 
 @api_router.get("/dashboard/recent-orders", response_model=List[Order])
 async def get_recent_orders(limit: int = 10):
