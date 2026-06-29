@@ -71,6 +71,10 @@
       "not dead",
       "not op_mini all"
     ],
+    "overrides": {
+  "ajv": "8.12.0",
+  "ajv-keywords": "5.1.0"
+    },
     "development": [
       "last 1 chrome version",
       "last 1 firefox version",
